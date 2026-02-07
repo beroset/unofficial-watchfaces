@@ -34,6 +34,7 @@ Available options:
 -a or --adb             use ADB command to communicate with watch
 -b or --boot            reboot watch after deploying multiple watchfaces
 -c or --circlewall WP   set the wallpaper for circular watchface thumbnail to the named file (WP)
+-d or --directory DIR   specify a custom directory for watchface files (test only)
 -e or --every           select every watchface (deploy only)
 -g or --gui             use the GTK+ gui
 -p or --port            specify an IP port to use for ssh and scp commands
@@ -71,6 +72,15 @@ Example:
 ./watchface test decimal-time
 ```
 This will start up a qmlscene tester for the named watch (`decimal-time` in this case) and allow you to see it operating or observe the effects of changes you make.  There are some limitations to the existing test script.  See the Watchface Creation [section on using the test script](https://asteroidos.org/wiki/watchfaces-creation/#scriptfeatures) for details.
+
+#### Testing with a custom watchface directory
+You can specify a custom directory for watchface files when testing. This is useful if you want to load watchface QML files from a different location than the standard watchface structure. The custom directory should contain the watchface QML files directly.
+
+Example:
+```
+./watchface --directory /path/to/custom/watchfaces test decimal-time
+```
+This will test the `decimal-time` watchface but load the QML file from `/path/to/custom/watchfaces/` instead of the default `decimal-time/usr/share/asteroid-launcher/watchfaces/` directory. When no custom directory is specified, the script uses the default watchface directory structure, maintaining full backward compatibility.
 
 ### Following great community contributions are available ###
 

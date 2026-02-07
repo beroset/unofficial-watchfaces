@@ -17,6 +17,7 @@ Available options:
 -a or --adb             use ADB command to communicate with watch
 -b or --boot            reboot watch after deploying multiple watchfaces
 -c or --circlewall WP   set the wallpaper for circular watchface thumbnail to the named file (WP)
+-d or --directory DIR   specify a custom directory for watchface files (test only)
 -e or --every           select every watchface (deploy only)
 -g or --gui             use the GTK+ gui
 -p or --port            specify an IP port to use for ssh and scp commands
@@ -59,6 +60,8 @@ WALLPAPER=""
 WALLPAPER_ROUND=""
 # Default to all watchfaces unselected for deploy
 DEFAULTOPTION=OFF
+# No custom watchface directory unless specified
+WATCHFACE_DIR=""
 # Default to not deploying all watchfaces
 DEPLOY_ALL=false
 # Print verbose messages to stderr
@@ -205,6 +208,23 @@ function testface {
     fi
     echo "Testing ${sourcewatchface}"
 
+    # Determine the watchface directory path
+    local watchface_path
+    if [ -n "${WATCHFACE_DIR}" ] ; then
+        # Custom directory specified
+        watchface_path="${WATCHFACE_DIR}"
+        printVerbose "Using custom watchface directory: ${watchface_path}"
+        # Validate that custom directory exists
+        if [ ! -d "${watchface_path}" ] ; then
+            echo "Error: custom watchface directory \"${watchface_path}\" does not exist" >&2
+            exit 1
+        fi
+    else
+        # Default to the watchface's own directory
+        watchface_path="${sourcewatchface}/usr/share/asteroid-launcher/watchfaces/"
+        printVerbose "Using default watchface directory: ${watchface_path}"
+    fi
+
     WATCHFACE_FONTS_PATH="${SCRIPT_DIRPATH}/${sourcewatchface}/usr/share/fonts/"
 
     if [ -d "${WATCHFACE_FONTS_PATH}" ]; then
@@ -258,9 +278,9 @@ EOF
     fi
 
     if [ -n "${WALLPAPER}" ] ; then
-        qmlscene "${sourcewatchface}" "${WALLPAPER}" "${WALLPAPER_ROUND}" "${sourcewatchface}/usr/share/asteroid-launcher/watchfaces/" loader.qml -I fake-components
+        qmlscene "${sourcewatchface}" "${WALLPAPER}" "${WALLPAPER_ROUND}" "${watchface_path}" loader.qml -I fake-components
     else
-        qmlscene "${sourcewatchface}" "background.jpg" "background-round.jpg" "${sourcewatchface}/usr/share/asteroid-launcher/watchfaces/" loader.qml -I fake-components
+        qmlscene "${sourcewatchface}" "background.jpg" "background-round.jpg" "${watchface_path}" loader.qml -I fake-components
     fi
     convertPreviews "${sourcewatchface}"
 }
@@ -464,7 +484,7 @@ SCRIPT_DIRPATH="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 # Preprocess command line switches with getopt to rearrange
 # them for easier parsing, separating non-option arguments
 # and option arguments.
-REARRANGED_OPTS=$(getopt -o 'abc:egqp:r:t:hw:v' --long 'adb,boot,circlewall:,every,gui,qemu,port:,remote:,transport:,help,wall:,verbose' -n "$0" -- "$@")
+REARRANGED_OPTS=$(getopt -o 'abc:d:egqp:r:t:hw:v' --long 'adb,boot,circlewall:,directory:,every,gui,qemu,port:,remote:,transport:,help,wall:,verbose' -n "$0" -- "$@")
 if [[ $? -ne 0 ]]; then
     echo "Error parsing arguments" >&2
     showHelp
@@ -487,6 +507,10 @@ while true; do
             ;;
         '-c'|'--circlewall')
             WALLPAPER_ROUND="$2"
+            shift 2
+            ;;
+        '-d'|'--directory')
+            WATCHFACE_DIR="$2"
             shift 2
             ;;
         '-e'|'--every')
