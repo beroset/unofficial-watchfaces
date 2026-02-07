@@ -563,9 +563,9 @@ if [ "$script_is_sourced" -gt 0 ]; then
 fi
 
 # Assume Dialog unless unavailable
-if hash dialog 2>/dev/null; then
+if ! hash dialog 2>/dev/null; then
     MENUPROGRAM="dialog"
-elif hash whiptail 2>/dev/null; then
+elif ! hash whiptail 2>/dev/null; then
     MENUPROGRAM="whiptail --separate-output"
 fi
 # location of temporary font directory
@@ -735,7 +735,7 @@ mapfile -t SCRIPT_WATCHFACES < <(cd "${SCRIPT_DIRPATH}" && find . -maxdepth 3 -t
 mapfile -t WATCHFACES < <(printf '%s\n' "${CWD_WATCHFACES[@]}" "${SCRIPT_WATCHFACES[@]}" | awk '!seen[$0]++')
 if [ "${SKIP_INTERACTIVE_PROMPT}" != "true" ] ; then
     if [ "${GUI}" = "true" ] ; then
-        if hash zenity 2>/dev/null; then
+        if ! hash zenity 2>/dev/null; then
             echo "Error: install 'zenity' to use gui menus."
         else
             guiMenu
