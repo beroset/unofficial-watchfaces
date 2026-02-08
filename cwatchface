@@ -1,0 +1,10 @@
+!#/user/bin env bash
+
+docker run -it --rm \
+-e XDG_RUNTIME_DIR=/tmp \
+-e WAYLAND_DISPLAY=$WAYLAND_DISPLAY \
+-e QT_QPA_PLATFORM=wayland \
+-v $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/tmp/$WAYLAND_DISPLAY  \
+--user $(id -u):$(id -g) \
+--security-opt label=type:container_runtime_t  \
+watchface $*
