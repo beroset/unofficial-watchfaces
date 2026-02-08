@@ -199,7 +199,8 @@ test_help_option() {
     output=$("$WATCHFACE_SCRIPT" --help 2>&1)
     local exit_code=$?
     
-    # Note: The script exits with 1 for help, which is non-standard but expected behavior
+    # Note: The script exits with code 1 for help (non-standard but existing behavior)
+    # We test the output content rather than the exit code
     assert_contains "$output" "watchface" "Help output contains script name"
     assert_contains "$output" "Available options" "Help output contains options section"
     assert_contains "$output" "Available commands" "Help output contains commands section"

@@ -7,7 +7,7 @@ This implementation adds comprehensive automated testing for the `watchface` scr
 ## Components Added
 
 ### 1. Test Suite (`tests/test_watchface.sh`)
-- **418 lines** of comprehensive test code
+- **367 lines** of comprehensive test code
 - **18 test cases** covering:
   - Script existence and permissions
   - Help and version commands
