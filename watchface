@@ -68,7 +68,7 @@ EOF
 # These variables are set based on parsed command-line switches and control
 # how the script communicates with the watch and which features are enabled.
 
-# SSH connection settings (default for Developer Mode)
+# SSH connection settings (default for SSH mode)
 # These are the defaults for SSH access to a watch on the local network
 WATCHPORT=22                    # SSH port number
 WATCHADDR=192.168.2.15          # Default IP address of the watch
@@ -122,28 +122,21 @@ function runWatchCommand {
     local cmd=$2
     case ${user} in
         root)
-            # Execute command as root user
             if [ "$ADB" = "true" ] ; then
-                # ADB mode: use adb shell with optional transport ID
                 adb ${TRANSPORT_ID} shell "${cmd}"
             else
-                # SSH mode: connect via SSH as root
                 ssh -p "${WATCHPORT}" -t root@"${WATCHADDR}" ${cmd}
             fi
             ;;
         ceres)
-            # Execute command as ceres user (the main user on AsteroidOS)
             if [ "$ADB" = "true" ] ; then
-                # ADB mode: use su to switch to ceres user
                 printf -v cmd %q "${cmd}"
                 adb ${TRANSPORT_ID} shell "su -l -c ${cmd} ceres"
             else
-                # SSH mode: connect via SSH as ceres
                 ssh -p "${WATCHPORT}" -t ceres@"${WATCHADDR}" ${cmd}
             fi
             ;;
         *)
-            # Invalid user specified
             echo "Error: unknown watch user ${user}"
             ;;
     esac
@@ -160,14 +153,12 @@ function printVerbose {
 }
 
 # Set a dconf configuration setting on the watch
-# dconf is the configuration system used by AsteroidOS
 # Args:
 #   $1 - dconfsetting: The dconf key path (e.g., "/desktop/asteroid/watchface")
 #   $2 - filename: The file path to set as the value
 function setDconf {
     local dconfsetting="$1"
     local filename="$2"
-    # Write the dconf setting as the ceres user with the file:// URI prefix
     runWatchCommand "ceres" "dconf write ${dconfsetting} '\"file://${filename}\"'"
 }
 
@@ -182,10 +173,8 @@ function pushFiles {
     local sourcedir="$2"
     local destdir="$3"
     if [ "$ADB" = "true" ] ; then
-        # ADB mode: use adb push with optional transport ID
         adb ${TRANSPORT_ID} push ${sourcedir} "${destdir}"
     else
-        # SSH mode: use scp with custom port
         scp -P"${WATCHPORT}" -r ${sourcedir} "${user}@${WATCHADDR}:${destdir}"
     fi
 }
@@ -194,7 +183,6 @@ function pushFiles {
 # Args:
 #   $1 - Watchface directory path containing usr/share/* structure
 function pushWatchface {
-    # Push all files from the watchface's usr/share subdirectory
     pushFiles "root" "${1}"'/usr/share/*' "/usr/share/"
 }
 
@@ -204,13 +192,9 @@ function pushWatchface {
 function pushWallpaper {
     local source="$1"
     local wallpaper
-    # Extract just the filename from the path
     wallpaper="$(basename "$1")"
-    # Construct the destination path on the watch
     local destination="/usr/share/asteroid-launcher/wallpapers/full/${wallpaper}"
-    # Upload the wallpaper file
     pushFiles "root" "${source}" "${destination}"
-    # Set the wallpaper as active in dconf
     setDconf "/desktop/asteroid/background-filename" "${destination}"
 }
 
@@ -231,7 +215,6 @@ function rebootWatch {
 # Args:
 #   $1 - Watchface name (without .qml extension)
 function activateWatchface {
-    # Set the active watchface in dconf to the specified QML file
     setDconf "/desktop/asteroid/watchface" "/usr/share/asteroid-launcher/watchfaces/${1}.qml"
 }
 
@@ -250,41 +233,31 @@ function watchfaceClone {
     local dest_name="$2"
     local files
     
-    # Validate that the source path exists
     if [ ! -d "${source_path}" ] ; then
         echo "Error: source watchface path \"${source_path}\" does not exist" >&2
         exit 1
     fi
     
-    # Extract just the watchface name from the source path (last component)
     local source_name
     source_name=$(basename "${source_path}")
     
-    # Find all files in the source watchface recursively
     mapfile -t files <<<"$(cd "${source_path}" && find . -type f | sed 's|^\./||')"
     
-    # Iterate through each file in the source watchface
     for file in "${files[@]}" ; do
-        # Skip empty lines from the file list
         if [[ -z "${file}" ]] ; then
             continue
         fi
         
-        # Replace source watchface name with destination name in the path
         local dest_file
         local destdir
         dest_file="${file//${source_name}/${dest_name}}"
         destdir="${dest_name}/$(dirname "${dest_file}")"
         
-        # Create destination directory structure
         mkdir -p "${destdir}"
-        # Copy the file
         cp "${source_path}/${file}" "${dest_name}/${dest_file}"
         
-        # For QML files, replace watchface name within the file contents
         local extension="${dest_file##*.}"
         if [ "${extension}" = "qml" ] ; then
-            # Use sed to replace all occurrences of source name with dest name
             sed -i "s/${source_name}/${dest_name}/g" "${dest_name}/${dest_file}"
         fi
     done
@@ -302,20 +275,16 @@ function findWatchface {
     local cwd_path="${PWD}/${watchface_name}"
     local script_path="${SCRIPT_DIRPATH}/${watchface_name}"
     
-    # Check current working directory first
-    # A valid watchface must have the usr/share/asteroid-launcher/watchfaces/ structure
     if [[ -d "${cwd_path}/usr/share/asteroid-launcher/watchfaces/" ]] ; then
         echo "${cwd_path}"
         return 0
     fi
     
-    # Then check script directory (where the official watchfaces are)
     if [[ -d "${script_path}/usr/share/asteroid-launcher/watchfaces/" ]] ; then
         echo "${script_path}"
         return 0
     fi
     
-    # Watchface not found in either location
     echo ""
     return 1
 }
@@ -325,23 +294,18 @@ function findWatchface {
 #   $1 - sourcewatchfacename: Name of the watchface to deploy
 #   $2 - activate: "true" to activate the watchface and push wallpaper, "false" otherwise
 function deployface {
-    # Get the short name, stripping trailing '/' if any
     local sourcewatchfacename="${1%/*}"
     local activate="$2"
     
-    # Find the watchface directory
     if ! sourcewatchfacedir=$(findWatchface "${sourcewatchfacename}") ; then
         exit 1
     fi
     
     echo "Deploying ${sourcewatchfacename}"
-    # Push the watchface files to the watch
     pushWatchface "${sourcewatchfacedir}"
     
-    # If this is the first (or only) watchface being deployed, activate it
     if [ "${activate}" = "true" ] ; then
         activateWatchface "${sourcewatchfacename}"
-        # Also push wallpaper if one is specified
         if [ -f "${WALLPAPER}" ] ; then
             pushWallpaper "${WALLPAPER}"
         fi
@@ -365,17 +329,14 @@ function deleteTempFontconfig {
 # Args:
 #   $1 - sourcewatchfacename: Name of the watchface to test
 function testface {
-    # Get the short name, stripping trailing '/' if any
     local sourcewatchfacename="${1%/*}"
     
-    # Find the watchface directory
     if ! sourcewatchfacedir=$(findWatchface "${sourcewatchfacename}") ; then
         exit 1
     fi
     
     echo "Testing ${sourcewatchfacename}"
 
-    # Check if the watchface has custom fonts
     WATCHFACE_FONTS_PATH="${sourcewatchfacedir}/usr/share/fonts/"
 
     if [ -d "${WATCHFACE_FONTS_PATH}" ]; then
@@ -405,7 +366,6 @@ function testface {
             exit 1
         fi
 
-        # Create the conf.d subdirectory if it doesn't exist
         LOCAL_FONTCONFIG_PATH="${LOCAL_FONTCONFIG_BASE_PATH}/conf.d"
         mkdir -p "$LOCAL_FONTCONFIG_PATH"
         local temp_font_config
@@ -417,10 +377,8 @@ function testface {
 
         printVerbose "Generating temporary fontconfig config file \"${temp_font_config}\""
 
-        # Set up a trap to delete the temporary fontconfig file on exit
         trap "deleteTempFontconfig \"${temp_font_config}\"" EXIT
 
-        # Generate the fontconfig XML configuration
         cat <<EOF > "${temp_font_config}"
 <?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd">
 <fontconfig>
@@ -431,7 +389,6 @@ EOF
         printVerbose "Watchface has no custom fonts"
     fi
 
-    # Ensure wallpaper files exist, checking in script directory if needed
     if [ ! -f "${WALLPAPER}" ] ; then
         WALLPAPER="${SCRIPT_DIRPATH}/${WALLPAPER}"
     fi
@@ -439,11 +396,8 @@ EOF
         WALLPAPER_ROUND="${SCRIPT_DIRPATH}/${WALLPAPER_ROUND}"
     fi
     
-    # Launch qmlscene with the watchface
-    # Arguments: watchface_name, wallpaper, wallpaper_round, watchface_dir, loader.qml, fake-components
     qmlscene "${sourcewatchfacename}" "${WALLPAPER}" "${WALLPAPER_ROUND}" "${sourcewatchfacedir}/usr/share/asteroid-launcher/watchfaces/" "${SCRIPT_DIRPATH}/loader.qml" -I "${SCRIPT_DIRPATH}/fake-components"
     
-    # After testing, convert any preview images that were generated
     convertPreviews "${sourcewatchfacename}" "${sourcewatchfacedir}"
 }
 
@@ -454,27 +408,23 @@ EOF
 function testraw {
     local qmlfile="$1"
     
-    # Validate that the QML file exists
     if [ ! -f "${qmlfile}" ] ; then
         echo "Error: QML file \"${qmlfile}\" does not exist" >&2
         exit 1
     fi
     
-    # Get absolute path and extract directory components
     local abs_qmlfile=$(readlink -f "${qmlfile}")
     local qml_dir=$(dirname "${abs_qmlfile}")
     local qml_basename=$(basename "${abs_qmlfile}")
-    local qml_name="${qml_basename%.qml}"  # Remove .qml extension
+    local qml_name="${qml_basename%.qml}"
     
     echo "Testing raw QML file: ${abs_qmlfile}"
     printVerbose "QML directory: ${qml_dir}"
     
-    # Check for fonts in a 'fonts' subdirectory next to the QML file
     if [ -d "${qml_dir}/fonts" ]; then
         WATCHFACE_FONTS_PATH="${qml_dir}/fonts/"
         printVerbose "Found fonts directory: ${WATCHFACE_FONTS_PATH}"
         
-        # Set up fontconfig for custom fonts (same logic as testface)
         LOCAL_FONTCONFIG_BASE_PATH="${XDG_CONFIG_HOME:-$HOME/.config}/fontconfig"
         if [ ! -d "${LOCAL_FONTCONFIG_BASE_PATH}" ]; then
             echo "Warning: Cannot generate temporary fontconfig config file; " \
@@ -483,15 +433,12 @@ function testraw {
             LOCAL_FONTCONFIG_PATH="${LOCAL_FONTCONFIG_BASE_PATH}/conf.d"
             mkdir -p "$LOCAL_FONTCONFIG_PATH"
             local temp_font_config
-            # Create temporary fontconfig file with 9999- prefix for last-in-order execution
             temp_font_config=$(mktemp -p "$LOCAL_FONTCONFIG_PATH" --suffix=".conf"  -t 9999-temp_font_config.XXXXXX) || { echo "Failed to generate temporary fontconfig config file" >&2; exit 1; }
             
             printVerbose "Generating temporary fontconfig config file \"${temp_font_config}\""
             
-            # Set up cleanup trap
             trap "deleteTempFontconfig \"${temp_font_config}\"" EXIT
             
-            # Generate fontconfig XML
             cat <<EOF > "${temp_font_config}"
 <?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd">
 <fontconfig>
@@ -503,7 +450,6 @@ EOF
         printVerbose "No fonts directory found in ${qml_dir}"
     fi
     
-    # Ensure wallpaper files exist
     if [ ! -f "${WALLPAPER}" ] ; then
         WALLPAPER="${SCRIPT_DIRPATH}/${WALLPAPER}"
     fi
@@ -511,8 +457,6 @@ EOF
         WALLPAPER_ROUND="${SCRIPT_DIRPATH}/${WALLPAPER_ROUND}"
     fi
     
-    # Run qmlscene with the raw QML file
-    # Pass the QML name (without extension), wallpapers, and the directory containing the QML file
     qmlscene "${qml_name}" "${WALLPAPER}" "${WALLPAPER_ROUND}" "${qml_dir}/" "${SCRIPT_DIRPATH}/loader.qml" -I "${SCRIPT_DIRPATH}/fake-components"
 }
 
@@ -525,14 +469,12 @@ EOF
 function convertPreviews {
     local watchfacename="$1"
     local watchfacedir="$2"
-    # Look for the transparent preview image
     local transparent="${watchfacename}-trans.png"
     local webResolution=320
     
     if [ -f "${transparent}" ] ; then
         echo "Converting ${transparent}"
         
-        # Check if ImageMagick's magick command is available
         if ! command -v magick &> /dev/null ; then
             echo "Error: cannot find magick (part of ImageMagick) on path"
             exit 1
@@ -543,24 +485,20 @@ function convertPreviews {
         for res in 112 128 144 160 182 ; do
             respath="${watchfacedir}/usr/share/asteroid-launcher/watchfaces-preview/${res}"
             mkdir -p "${respath}"
-            # Resize, sharpen, compress, and strip metadata
             magick "${transparent}" \
                 -resize "${res}x${res}" -adaptive-sharpen 0x.8 -quality 70 -strip \
                 "${respath}/${watchfacename}.png"
         done
         
         # Generate the thumbnail images for the web (README display)
-        # Create both square and round versions
         for thumb in "${watchfacename}" "${watchfacename}-round" ; do
             magick "${thumb}.png" \
                 -resize "${webResolution}x${webResolution}" -adaptive-sharpen 0x.4 -quality 85 \
                 ".thumbnails/${thumb}.webp"
         done
         
-        # Clean up the temporary preview PNG files
         rm "${watchfacename}.png" "${watchfacename}-round.png" "${transparent}"
         
-        # Generate a markdown snippet for adding to README.md
         echo "| ![thumbnail](.thumbnails/${watchfacename}-round.webp) |![thumbnail](.thumbnails/${watchfacename}.webp) | [${watchfacename}](${watchfacename}/usr/share/asteroid-launcher/watchfaces/${watchfacename}.qml) | [yourname](https://github.com/yourname) |" > "${watchfacename}.md"
         echo "Add the contents of ${watchfacename}.md to README.md, adding font licenses and your name"
     else
@@ -573,24 +511,20 @@ function convertPreviews {
 #   $1 - sourcewatchfacename: Name of the source watchface
 #   $2 - destwatchface: Name of the destination watchface
 function cloneface {
-    # Get the short name, stripping trailing '/' if any
     local sourcewatchfacename="${1%/*}"
     local destwatchface="$2"
     
-    # Find the source watchface directory
     if ! sourcewatchfacedir=$(findWatchface "${sourcewatchfacename}") ; then
         exit 1
     fi
     
     echo "Cloning ${sourcewatchfacename} into ${destwatchface}"
     
-    # Verify destination doesn't already exist
     if [ -e "${destwatchface}" ] ; then
         echo "Error:  ${destwatchface} already exists, exiting program"
         exit
     fi
     
-    # Perform the clone operation
     watchfaceClone "${sourcewatchfacedir}" "${destwatchface}"
 }
 
@@ -605,27 +539,22 @@ function guiMenu {
     local action
     local default
     
-    # Present a menu to select an action (deploy, clone, or test)
     if ! action=$(zenity --title="Select action" --list --radiolist \
         --column="selected" --column="action" \
         TRUE deploy \
         FALSE clone \
         FALSE test); then
-        # User cancelled
         exit
     fi
     
-    # Set the default selection state based on DEFAULTOPTION
     if [ "${DEFAULTOPTION}" == "ON" ] ; then
         default=TRUE
     else
         default=FALSE
     fi
     
-    # Handle the selected action
     case $action in
         deploy)
-            # For deploy, allow multiple selections via checklist
             declare -a args=('--title="Choose watchfaces"' "--list" "--checklist" '--column="Selected"' '--column="Name"')
             for wf in "${WATCHFACES[@]}" ; do
                 args+=("${default}" "${wf}")
@@ -635,21 +564,17 @@ function guiMenu {
             fi
             ;;
         clone|test)
-            # For clone and test, allow only single selection
             if ! watchface=$(zenity --title="Choose a watchface" --list --column="Name" "${WATCHFACES[@]}"); then
                 exit
             fi
             ;;
     esac
     
-    # Convert pipe chars to spaces (zenity uses | as separator for multiple selections)
     watchface=${watchface//|/ }
     
-    # Confirm the action with the user
     if zenity --question --title="Confirming" --text="${action} ${watchface}" ; then
         echo "OK!"
         if [ "${action}" = "clone" ] ; then
-            # For clone, prompt for the new watchface name
             if newface=$(zenity --entry --title="Cloning ${watchface}" \
                 --text="Enter name of new watchface:" \
                 --entry-text "newface")
@@ -657,21 +582,16 @@ function guiMenu {
             else echo "No name entered"
             fi
         elif [ "${action}" = "deploy" ] ; then
-            # Deploy all selected watchfaces
             local first=true
             for wf in ${watchface}; do
-                # Only activate the first watchface
                 deployface "${wf}" "${first}"
                 first=false
             done
-            # Restart ceres session to recognize new watchfaces
             restartCeres
-            # Reboot if requested
             if [ "${REBOOT}" = "true" ] ; then
                 rebootWatch
             fi
         else
-            # Test the selected watchface
             testface "${watchface}"
         fi
     else
@@ -686,21 +606,17 @@ function textMenu {
     local watchface
     local newface
     
-    # Present a menu to select an action (deploy, clone, or test)
     if ! action=$(${MENUPROGRAM} --title "Select action" --clear --radiolist \
         "Select action" 0 0 3 \
         "deploy" "Deploy watchface to watch" ON \
         "clone" "Clone watchface to new name" OFF \
         "test" "Test watchface on computer" OFF \
         3>&1 1>&2 2>&3); then
-        # User cancelled
         exit
     fi
     
-    # Handle the selected action
     case $action in
         deploy)
-            # For deploy, show a checklist of all watchfaces
             declare -a args=("--title" "Watchfaces" "--clear" "--checklist" "Choose watchfaces:" 25 78 15 "--" )
             for wf in "${WATCHFACES[@]}" ; do
                 args+=("${wf}" "" "${DEFAULTOPTION}")
@@ -710,7 +626,6 @@ function textMenu {
             fi
             ;;
         clone|test)
-            # For clone and test, show a single-selection menu
             declare -a args=("--title" "Watchfaces" "--clear" "--menu" "Choose a watchface:" 25 78 15 "--" )
             for wf in "${WATCHFACES[@]}" ; do
                 args+=("${wf}" "")
@@ -721,11 +636,9 @@ function textMenu {
             ;;
     esac
     
-    # Confirm the action with the user
     if (${MENUPROGRAM} --clear --title "Confirming" --yesno "${action} ${watchface}" 0 0); then
         echo "OK!"
         if [ "${action}" = "clone" ] ; then
-            # For clone, prompt for the new watchface name
             if newface=$(${MENUPROGRAM} \
                 --title "Cloning ${watchface}" --clear \
                 --inputbox "Enter name of new watchface:" \
@@ -737,19 +650,15 @@ function textMenu {
                 echo "No name entered"
             fi
         elif [ "${action}" = "deploy" ] ; then
-            # Deploy all selected watchfaces
             local first=true
             for wf in ${watchface}; do
-                # Only activate the first watchface
                 deployface "${wf}" "${first}"
                 first=false
             done
-            # Reboot if requested
             if [ "${REBOOT}" = "true" ] ; then
                 rebootWatch
             fi
         else
-            # Test the selected watchface
             testface "${watchface}"
         fi
     else
@@ -820,73 +729,59 @@ unset REARRANGED_OPTS
 while true; do
     case "$1" in
         '-a'|'--adb')
-            # Use ADB mode instead of SSH
             ADB=true
             shift
             ;;
         '-b'|'--boot')
-            # Reboot watch after deploying watchfaces
             REBOOT=true
             shift
             ;;
         '-c'|'--circlewall')
-            # Set custom wallpaper for circular display
             WALLPAPER_ROUND="$2"
             shift 2
             ;;
         '-e'|'--every')
-            # Select all watchfaces by default in deploy menu
             DEFAULTOPTION=ON
             shift
             ;;
         '-g'|'--gui')
-            # Use graphical (zenity) menu instead of text menu
             GUI=true
             shift
             ;;
         '-q'|'--qemu')
-            # Connect to QEMU emulated watch
             WATCHPORT=${QEMUPORT}
             WATCHADDR=${QEMUADDR}
             shift
             ;;
         '-p'|'--port')
-            # Custom SSH port
             WATCHPORT="$2"
             shift 2
             ;;
         '-r'|'--remote')
-            # Custom watch IP address or hostname
             WATCHADDR="$2"
             shift 2
             ;;
         '-t'|'--transport')
-            # ADB transport ID for multiple connected devices
             TRANSPORT_ID="-t $2"
             shift 2
             ;;
         '-h'|'--help')
-            # Display help and exit
             showHelp
             exit 1
             ;;
         '-w'|'--wall')
-            # Set custom wallpaper for square display
             WALLPAPER="$2"
             shift 2
             ;;
         '-v'|'--verbose')
-            # Enable verbose output for debugging
             VERBOSE_MESSAGES=true
             shift
             ;;
         '--')
-            # End of options marker
             shift
             break
             ;;
         *)
-            # Should not reach here if getopt is working correctly
             echo "Internal error parsing arguments" >&2
             exit 1
             ;;
@@ -907,31 +802,26 @@ fi
 # Validate that the command has the correct number of arguments
 case "$COMMAND" in
     "clone")
-        # clone requires source and destination watchface names
         if [[ ${#COMMAND_ARGS[@]} -ne 2 ]]; then
             echo "Error: clone command requires exactly 2 arguments (source and destination)" >&2
             exit 1
         fi
         ;;
     "deploy"|"test"|"raw")
-        # deploy, test, and raw require exactly one argument
         if [[ ${#COMMAND_ARGS[@]} -ne 1 ]]; then
             echo "Error: $COMMAND command requires exactly 1 argument" >&2
             exit 1
         fi
         ;;
     "deployall"|"update"|"version")
-        # These commands take no arguments
         if [[ ${#COMMAND_ARGS[@]} -ne 0 ]]; then
             echo "Error: $COMMAND command takes no arguments" >&2
             exit 1
         fi
         ;;
     "")
-        # No command specified - this is OK for interactive mode
         ;;
     *)
-        # Unknown command
         echo "Error: Unknown command '$COMMAND'" >&2
         showHelp
         exit 1
@@ -944,46 +834,37 @@ printVerbose "Script is located in directory path \"$SCRIPT_DIRPATH\""
 # Command Execution
 # ============================================================================
 
-# Execute the specified command
 case "$COMMAND" in
     "clone")
-        # Clone a watchface to create a new one
         cloneface "${COMMAND_ARGS[0]}" "${COMMAND_ARGS[1]}"
         SKIP_INTERACTIVE_PROMPT=true
         ;;
     "deployall")
-        # Deploy all watchfaces (handled later in the script)
         DEPLOY_ALL=true
         SKIP_INTERACTIVE_PROMPT=true
         ;;
     "deploy")
-        # Deploy a single watchface and activate it
         deployface "${COMMAND_ARGS[0]}" true
         restartCeres
         SKIP_INTERACTIVE_PROMPT=true
         ;;
     "test")
-        # Test a watchface locally
         testface "${COMMAND_ARGS[0]}"
         SKIP_INTERACTIVE_PROMPT=true
         ;;
     "raw")
-        # Test a raw QML file
         testraw "${COMMAND_ARGS[0]}"
         SKIP_INTERACTIVE_PROMPT=true
         ;;
     "update")
-        # Update the repository using git
         git pull
         SKIP_INTERACTIVE_PROMPT=true
         ;;
     "version")
-        # Display version and exit
         showVersion
         SKIP_INTERACTIVE_PROMPT=true
         ;;
     "")
-        # No command - will enter interactive mode
         echo "No command specified, entering interactive mode"
         ;;
 esac
@@ -996,26 +877,21 @@ esac
 # Find all watchfaces in CWD first, then in script directory
 # A watchface is identified by having the usr/share directory structure
 
-# Find watchfaces in current working directory
 mapfile -t CWD_WATCHFACES < <(find . -maxdepth 3 -type d -path "*/usr/share" 2>/dev/null | sed 's|/usr/share$||' | sort | awk -F '/' '{print $2}')
 
-# Find watchfaces in script directory
 mapfile -t SCRIPT_WATCHFACES < <(cd "${SCRIPT_DIRPATH}" && find . -maxdepth 3 -type d -path "*/usr/share" 2>/dev/null | sed 's|/usr/share$||' | sort | awk -F '/' '{print $2}')
 
-# Combine both lists, removing duplicates (CWD takes precedence)
 mapfile -t WATCHFACES < <(printf '%s\n' "${CWD_WATCHFACES[@]}" "${SCRIPT_WATCHFACES[@]}" | awk '!seen[$0]++')
 
 # Start interactive mode if no command was executed
 if [ "${SKIP_INTERACTIVE_PROMPT}" != "true" ] ; then
     if [ "${GUI}" = "true" ] ; then
-        # GUI mode with zenity
         if ! hash zenity 2>/dev/null; then
             echo "Error: install 'zenity' to use gui menus."
         else
             guiMenu
         fi
     else
-        # Text mode with dialog or whiptail
         if [ -z "${MENUPROGRAM}" ] ; then
             echo "Error: install either 'dialog' or 'whiptail' to use text menus."
         else
@@ -1023,6 +899,5 @@ if [ "${SKIP_INTERACTIVE_PROMPT}" != "true" ] ; then
         fi
     fi
 elif [ "${DEPLOY_ALL}" == "true" ] ; then
-    # Execute deployall command (deferred to here so watchface list is populated)
     deployall
 fi
