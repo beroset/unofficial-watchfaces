@@ -5,6 +5,7 @@ LABEL maintainer="Ed Beroset <beroset@ieee.org>"
 WORKDIR /tmp/
 ENV TZ=America/New_York
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 # Install packages required to build qml-asteroid
 RUN apt-get update && apt-get install -y \
   build-essential cmake git pkg-config qtbase5-dev qtdeclarative5-dev \
@@ -14,6 +15,7 @@ RUN apt-get update && apt-get install -y \
   ninja-build ca-certificates qtbase5-dev qtbase5-dev-tools qtchooser \
   qtdeclarative5-dev qml-module-qtquick2 wget libqt5svg5-dev \
   extra-cmake-modules
+
 # get a newer version of CMake to handle nested generator expressions
 RUN wget -qO /tmp/cmake.sh https://github.com/Kitware/CMake/releases/download/v4.2.3/cmake-4.2.3-linux-x86_64.sh && sh /tmp/cmake.sh --skip-license --prefix=/usr/local \ && rm /tmp/cmake.sh
 RUN git clone https://github.com/AsteroidOS/qml-asteroid

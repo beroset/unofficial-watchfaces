@@ -1,10 +1,45 @@
-!#/user/bin env bash
+#!/usr/bin/env bash
 
-docker run -it --rm \
+# The command used to do container stuff, "podman" or "docker"
+CCMD=
+
+# The tag name for the generated image
+IMGNAME="watchface"
+
+if command -v podman &> /dev/null; then
+  CCMD="podman"
+elif command -v docker &> /dev/null; then
+  CCMD="docker"
+else
+  echo "Error: neither podman nor docker available, install either of them before running this script" >&2
+  exit 1
+fi
+
+# make sure podman/docker daemon is running
+if [[ "podman" == "$CCMD" ]]; then
+  # has no effect if podman is already running
+  podman machine start
+elif ! docker info > /dev/null 2>&1; then
+  # TODO: this error message isn't very helpful if the system doesn't use systemd
+  echo "Error: docker daemon not running, start it with 'sudo systemctl start docker' before running this script" >&2
+  exit 1
+fi
+
+# build the image if it doesn't exist
+$CCMD inspect "$IMGNAME" > /dev/null 2>&1 || {
+  echo "no image tagged '$IMGNAME' found, building from Dockerfile..."
+  $CCMD build -t $IMGNAME .
+  [ $? -eq 0 ] || {
+    echo "Error: failed building image, exiting..." >&2
+    exit 1
+  }
+}
+
+$CCMD run -it --rm \
 -e XDG_RUNTIME_DIR=/tmp \
 -e WAYLAND_DISPLAY=$WAYLAND_DISPLAY \
 -e QT_QPA_PLATFORM=wayland \
 -v $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/tmp/$WAYLAND_DISPLAY  \
 --user $(id -u):$(id -g) \
 --security-opt label=type:container_runtime_t  \
-watchface $*
+$IMGNAME $*
