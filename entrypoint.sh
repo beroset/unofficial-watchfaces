@@ -33,10 +33,11 @@ To give the container access to your watch via USB, run the container like this:
       # [...] \
       --device=/dev/ttyUSB0 # replace with path to your device \
       watchface
-EOF)
+EOF
+)
 
 # TODO: figure out when and how to display which message
 
 # delegate to watchface script
-watchface $*
+$*
 

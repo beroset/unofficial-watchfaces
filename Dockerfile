@@ -28,15 +28,22 @@ FROM debian:bookworm-slim
 WORKDIR /
 RUN apt-get update && apt-get install -y git whiptail zenity qmlscene \
   qml-module-qtquick-layouts qml-module-qt-labs-settings qml-module-qtquick-dialogs \
-  qml-module-qtquick-controls2 qml-module-qtgraphicaleffects 
+  qml-module-qtquick-controls2 qml-module-qtgraphicaleffects qml-module-qtquick-shapes
 COPY --from=builder /usr/lib/x86_64-linux-gnu/qt5/qml/org /usr/lib/x86_64-linux-gnu/qt5/qml/org/
-RUN git clone https://github.com/AsteroidOS/unofficial-watchfaces.git
+COPY . .
 
-RUN mkdir /xdgcache && chmod 1777 /xdgcache
-RUN mkdir -p /.config/fontconfig && chmod 1777 /.config/fontconfig
+ARG xdgcachehome=/xdgcache
+ARG fontconfigpath=/.config/fontconfig
 
-ENV XDG_CACHE_HOME=/xdgcache
-ENV FONTCONFIG_PATH=/.config/fontconfig
+RUN install -d -m 1777 $xdgcachehome
+RUN install -d -m 1777 $fontconfigpath
 
-WORKDIR /unofficial-watchfaces/
-ENTRYPOINT ["/unofficial-watchfaces/watchface"]
+ENV XDG_CACHE_HOME=$xdgcachehome
+ENV FONTCONFIG_PATH=$fontconfigpath
+
+WORKDIR /
+CMD ["/watchface"]
+
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
