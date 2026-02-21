@@ -41,8 +41,16 @@ Item {
             + t.getMilliseconds()) * metricSecondsScaleFactor
     }
 
-    function getMetricHours(metricMilli){
-        return getMetricMilliseconds(wallClock.time) / metricMinutesPerMetricHour / metricSecondsPerMetricMinute / 1000
+    function getMetricHours(t){
+        return getMetricMilliseconds(t) / metricMinutesPerMetricHour / metricSecondsPerMetricMinute / 1000
+    }
+
+    // returns the number of standard milliseconds until the next full decimal second
+    function getStandardMillisecondsToNextDecimalSecond() {
+        let now = new Date()
+        let decimalMillis = 1000 - (getMetricMilliseconds(now) % 1000)
+
+        return Math.round(decimalMillis / metricSecondsScaleFactor)
     }
 
     component Tick: Rectangle {
@@ -173,7 +181,18 @@ Item {
         font.pixelSize: parent.width*0.15
         anchors.verticalCenterOffset: parent.width*0.016
         textFormat: Text.RichText
-        text: getMetricHours(wallClock.time).toPrecision(5)
+        text: "0.0000"
     }
 
+    Timer {
+        id: decimalSecondsTimer
+        running: true
+        repeat: true
+        interval: getStandardMillisecondsToNextDecimalSecond()
+        onTriggered: function() {
+            decimalHours.text = getMetricHours(new Date()).toPrecision(5)
+            // Math.max to prevent rapid double firing in case it fires just before the boundary
+            interval = Math.max(100, getStandardMillisecondsToNextDecimalSecond())
+        }
+    }
 }
