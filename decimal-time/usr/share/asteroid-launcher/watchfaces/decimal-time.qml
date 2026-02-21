@@ -19,10 +19,10 @@
 import QtQuick 2.1
 
 Item {
-    // these three constants describe metric time
-    readonly property int metricHoursPerStandardDay: 10
-    readonly property int metricMinutesPerMetricHour: 100
-    readonly property int metricSecondsPerMetricMinute: 100
+    // these three constants describe decimal time
+    readonly property int decimalHoursPerStandardDay: 10
+    readonly property int decimalMinutesPerDecimalHour: 100
+    readonly property int decimalSecondsPerDecimalMinute: 100
 
     // this constant adjusts the minutes ticks on the watchface
     readonly property int majorMinuteTicksEvery: 5
@@ -31,26 +31,26 @@ Item {
     readonly property int revolutionsPerDay: 1
 
     // these are derived constants
-    readonly property int metricSecondsPerStandardDay: metricHoursPerStandardDay * metricMinutesPerMetricHour * metricSecondsPerMetricMinute
-    readonly property double metricSecondsScaleFactor: metricSecondsPerStandardDay / 86400
+    readonly property int decimalSecondsPerStandardDay: decimalHoursPerStandardDay * decimalMinutesPerDecimalHour * decimalSecondsPerDecimalMinute
+    readonly property double decimalSecondsScaleFactor: decimalSecondsPerStandardDay / 86400
 
-    function getMetricMilliseconds(t) {
+    function getDecimalMilliseconds(t) {
         return (t.getHours() * 3600000
             + t.getMinutes() * 60000
             + t.getSeconds() * 1000
-            + t.getMilliseconds()) * metricSecondsScaleFactor
+            + t.getMilliseconds()) * decimalSecondsScaleFactor
     }
 
-    function getMetricHours(t){
-        return getMetricMilliseconds(t) / metricMinutesPerMetricHour / metricSecondsPerMetricMinute / 1000
+    function getDecimalHours(t){
+        return getDecimalMilliseconds(t) / decimalMinutesPerDecimalHour / decimalSecondsPerDecimalMinute / 1000
     }
 
     // returns the number of standard milliseconds until the next full decimal second
     function getStandardMillisecondsToNextDecimalSecond() {
         let now = new Date()
-        let decimalMillis = 1000 - (getMetricMilliseconds(now) % 1000)
+        let decimalMillis = 1000 - (getDecimalMilliseconds(now) % 1000)
 
-        return Math.round(decimalMillis / metricSecondsScaleFactor)
+        return Math.round(decimalMillis / decimalSecondsScaleFactor)
     }
 
     component Tick: Rectangle {
@@ -78,7 +78,7 @@ Item {
 
     Repeater{
         id: minuteTicks
-        model: metricMinutesPerMetricHour / revolutionsPerDay
+        model: decimalMinutesPerDecimalHour / revolutionsPerDay
         Tick {
             angle: (index)*360/minuteTicks.count
             color: "lightgreen"
@@ -91,7 +91,7 @@ Item {
 
     Repeater{
         id: hourTicks
-        model: metricHoursPerStandardDay / revolutionsPerDay
+        model: decimalHoursPerStandardDay / revolutionsPerDay
         Tick {
             angle: (index)*360/hourTicks.count
             color: "lightgreen"
@@ -103,7 +103,7 @@ Item {
 
     Repeater{
         id: hourLabels
-        model: metricHoursPerStandardDay / revolutionsPerDay
+        model: decimalHoursPerStandardDay / revolutionsPerDay
         Text {
             font {
                 pixelSize: parent.height*0.08
@@ -119,7 +119,7 @@ Item {
                 Rotation {
                     origin.x: hourLabel.width/2
                     origin.y: hourLabel.height + parent.width * 0.40
-                    angle: (index)*360/ (metricHoursPerStandardDay / revolutionsPerDay)
+                    angle: (index)*360/ (decimalHoursPerStandardDay / revolutionsPerDay)
                 },
                 Translate {
                     x: (parent.width - hourLabel.width)/2
@@ -140,7 +140,7 @@ Item {
             Rotation {
                 origin.x : logoAsteroid.width/2
                 origin.y : logoAsteroid.height + parent.width * 0.275
-                angle: getMetricHours(wallClock.time) * 360 * revolutionsPerDay / metricHoursPerStandardDay
+                angle: getDecimalHours(wallClock.time) * 360 * revolutionsPerDay / decimalHoursPerStandardDay
             },
             Translate {
                 x: (parent.width - logoAsteroid.width)/2
@@ -190,7 +190,7 @@ Item {
         repeat: true
         interval: getStandardMillisecondsToNextDecimalSecond()
         onTriggered: function() {
-            decimalHours.text = getMetricHours(new Date()).toPrecision(5)
+            decimalHours.text = getDecimalHours(new Date()).toPrecision(5)
             // Math.max to prevent rapid double firing in case it fires just before the boundary
             interval = Math.max(100, getStandardMillisecondsToNextDecimalSecond())
         }
